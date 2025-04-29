@@ -207,17 +207,17 @@ export function UsersTable({ users: propUsers, showRefresh = false }: UsersTable
                           <Avatar className="h-10 w-10 border border-border/20 shadow-sm">
                         <AvatarImage 
                           src={user.imgname ? `/images/${user.imgname}` : undefined} 
-                          alt={`${user.fname || ''} ${user.lname || ''}`} 
+                          alt={`${user.lname || ''} ${user.fname || ''}`} 
                         />
                             <AvatarFallback className="bg-primary/10 text-primary">
                           {user.fname && user.lname 
-                            ? `${user.fname[0]}${user.lname[0]}` 
+                            ? `${user.lname[0]}${user.fname[0]}` 
                             : user.username?.slice(0, 2).toUpperCase() || 'U'}
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
                         <p className="font-medium leading-none truncate max-w-[120px] sm:max-w-none">
-                          {`${user.fname || ''} ${user.mname ? user.mname[0] + '. ' : ''}${user.lname || ''}`}
+                          {`${user.lname || ''}, ${user.fname || ''} ${user.mname ? user.mname[0] + '.' : ''}`}
                         </p>
                             <p className="text-sm text-muted-foreground mt-1.5 truncate max-w-[120px] sm:max-w-none">
                           {user.username || 'N/A'}

@@ -39,14 +39,26 @@ export const BarangayCoordinatorPrintTemplate = forwardRef<HTMLDivElement, Baran
       });
     };
 
-    const renderCoordinatorTemplate = (coordinator: PrintWardLeaderData, index: number, isLastInGroup: boolean) => {
+    const renderCoordinatorTemplate = (coordinator: PrintWardLeaderData, index: number, isLastInGroup: boolean, globalIndex: number) => {
       return (
         <div key={`coordinator-${coordinator.leaderId}-${index}`} className="template-section">
-          <div className="print-layout">
+          <div className="print-layout relative">
+            {/* Item number indicator */}
+            <div className="item-number-indicator">{globalIndex + 1}</div>
+            
             {/* Left Column - Barangay Coordinator Information */}
             <div className="print-left-column">
               {/* Barangay Coordinator Number Header */}
               <h1 className="text-lg font-bold mb-3">Barangay Coordinator ID: #{coordinator.v_id}</h1>
+              
+              {/* Address Display */}
+              <div className="text-right text-xs mb-2">
+                {coordinator.municipality && coordinator.barangay && (
+                  <div>
+                    {coordinator.municipality}, {coordinator.barangay}
+                  </div>
+                )}
+              </div>
               
               {/* Voting Preference Table */}
               <div className="print-voting-table-container mt-3">
@@ -309,16 +321,33 @@ export const BarangayCoordinatorPrintTemplate = forwardRef<HTMLDivElement, Baran
             page-break-after: always;
             height: 0;
           }
+          /* Item number indicator styling */
+          .item-number-indicator {
+            position: absolute;
+            top: 0cm;
+            right: 0.2cm;
+            font-size: 0.2rem;
+            font-weight: normal;
+            color: #000;
+            z-index: 100;
+            background-color: white;
+            padding: 0 1px;
+          }
+          .relative {
+            position: relative;
+          }
         `}</style>
         
         {/* Print pages - one for each group of 3 coordinators */}
         {coordinatorGroups.map((group, groupIndex) => (
           <div key={`group-${groupIndex}`} className="print-page">
+
             {group.map((coordinator, index) => 
               renderCoordinatorTemplate(
                 coordinator, 
                 index, 
-                index === group.length - 1
+                index === group.length - 1,
+                groupIndex * 3 + index
               )
             )}
           </div>

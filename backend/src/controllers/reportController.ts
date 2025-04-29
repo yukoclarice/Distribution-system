@@ -50,7 +50,7 @@ export const getWardLeadersReport = async (req: Request, res: Response) => {
         v.v_fname LIKE '%${name}%' OR 
         v.v_mname LIKE '%${name}%' OR 
         v.v_lname LIKE '%${name}%' OR
-        CONCAT(v.v_fname, ' ', v.v_mname, ' ', v.v_lname) LIKE '%${name}%'
+        CONCAT(v.v_lname, ', ', v.v_fname, ' ', v.v_mname) LIKE '%${name}%'
       )`;
     }
     
@@ -78,9 +78,9 @@ export const getWardLeadersReport = async (req: Request, res: Response) => {
       `SELECT 
         v.v_id,
         CONCAT(
+          IFNULL(v.v_lname, ''), ', ',
           IFNULL(v.v_fname, ''), ' ',
-          IFNULL(v.v_mname, ''), ' ',
-          IFNULL(v.v_lname, '')
+          IFNULL(v.v_mname, '')
         ) AS full_name,
         b.barangay,
         b.municipality,
@@ -175,9 +175,9 @@ export const getHouseholdHeads = async (req: Request, res: Response) => {
       `SELECT DISTINCT
         hh.id AS household_id,
         CONCAT(
+          IFNULL(hh_head.v_lname, ''), ', ',
           IFNULL(hh_head.v_fname, ''), ' ',
-          IFNULL(hh_head.v_mname, ''), ' ',
-          IFNULL(hh_head.v_lname, '')
+          IFNULL(hh_head.v_mname, '')
         ) AS household_head_name,
         b.barangay AS location,
         b.municipality,
@@ -187,10 +187,12 @@ export const getHouseholdHeads = async (req: Request, res: Response) => {
           FROM household_warding hw 
           WHERE hw.fh_v_id = hh.fh_v_id
         ) AS household_members_count,
+        hh.date_saved AS registration_date,
+        hh.is_printed,
         CONCAT(
+          IFNULL(leader.v_lname, ''), ', ',
           IFNULL(leader.v_fname, ''), ' ',
-          IFNULL(leader.v_mname, ''), ' ',
-          IFNULL(leader.v_lname, '')
+          IFNULL(leader.v_mname, '')
         ) AS leader_name,
         hh.date_saved AS registration_date,
         hh.is_printed
@@ -265,21 +267,21 @@ export const getHouseholdMembers = async (req: Request, res: Response) => {
     
     const fhVId = (household[0] as any).fh_v_id;
     
-    // Execute the query to get all members of this household using fh_v_id
-    const householdMembers = await sequelize.query(
+    // Get members for this household
+    const members = await sequelize.query(
       `SELECT 
         hw.id AS member_record_id,
         hw.fh_v_id AS household_head_id,
         CONCAT(
+          IFNULL(head.v_lname, ''), ', ',
           IFNULL(head.v_fname, ''), ' ',
-          IFNULL(head.v_mname, ''), ' ',
-          IFNULL(head.v_lname, '')
+          IFNULL(head.v_mname, '')
         ) AS household_head_name,
         hw.mem_v_id AS member_id,
         CONCAT(
+          IFNULL(member.v_lname, ''), ', ',
           IFNULL(member.v_fname, ''), ' ',
-          IFNULL(member.v_mname, ''), ' ',
-          IFNULL(member.v_lname, '')
+          IFNULL(member.v_mname, '')
         ) AS member_name,
         member.v_gender AS gender,
         member.v_birthday AS birthdate,
@@ -308,7 +310,7 @@ export const getHouseholdMembers = async (req: Request, res: Response) => {
         hw.fh_v_id = ?
       ORDER BY 
         household_role DESC,
-        member_name`,
+        member.v_lname, member.v_fname, member.v_mname`,
       {
         replacements: [fhVId],
         type: QueryTypes.SELECT
@@ -318,7 +320,7 @@ export const getHouseholdMembers = async (req: Request, res: Response) => {
     // Return the data
     res.json({
       status: 'success',
-      data: householdMembers
+      data: members
     });
     
   } catch (error: any) {
@@ -347,9 +349,9 @@ export const getWardLeaderById = async (req: Request, res: Response) => {
       `SELECT 
         v.v_id,
         CONCAT(
+          IFNULL(v.v_lname, ''), ', ',
           IFNULL(v.v_fname, ''), ' ',
-          IFNULL(v.v_mname, ''), ' ',
-          IFNULL(v.v_lname, '')
+          IFNULL(v.v_mname, '')
         ) AS full_name,
         b.barangay,
         b.municipality,
@@ -472,7 +474,7 @@ export const getBarangayCoordinators = async (req: Request, res: Response) => {
         v.v_fname LIKE '%${name}%' OR 
         v.v_mname LIKE '%${name}%' OR 
         v.v_lname LIKE '%${name}%' OR
-        CONCAT(v.v_fname, ' ', v.v_mname, ' ', v.v_lname) LIKE '%${name}%'
+        CONCAT(v.v_lname, ', ', v.v_fname, ' ', v.v_mname) LIKE '%${name}%'
       )`;
     }
     
@@ -493,9 +495,9 @@ export const getBarangayCoordinators = async (req: Request, res: Response) => {
       `SELECT 
         v.v_id,
         CONCAT(
+          IFNULL(v.v_lname, ''), ', ',
           IFNULL(v.v_fname, ''), ' ',
-          IFNULL(v.v_mname, ''), ' ',
-          IFNULL(v.v_lname, '')
+          IFNULL(v.v_mname, '')
         ) AS full_name,
         b.barangay,
         b.municipality,
@@ -513,7 +515,7 @@ export const getBarangayCoordinators = async (req: Request, res: Response) => {
       FROM 
         leaders l
       JOIN 
-        v_info v ON l.v_id = v.v_id
+        v_info v ON l.v_id = v.v_id AND v.record_type = 1
       LEFT JOIN
         barangays b ON v.barangayId = b.id
       WHERE 
@@ -573,7 +575,7 @@ export const getWardLeadersByCoordinator = async (req: Request, res: Response) =
     const coordinator = await sequelize.query(
       `SELECT v.barangayId 
        FROM leaders l
-       JOIN v_info v ON l.v_id = v.v_id
+       JOIN v_info v ON l.v_id = v.v_id AND v.record_type = 1
        WHERE l.v_id = ? AND l.type = 2`,
       {
         replacements: [coordinatorId],
@@ -595,9 +597,9 @@ export const getWardLeadersByCoordinator = async (req: Request, res: Response) =
       `SELECT 
         l.v_id,
         CONCAT(
+          IFNULL(v.v_lname, ''), ', ',
           IFNULL(v.v_fname, ''), ' ',
-          IFNULL(v.v_mname, ''), ' ',
-          IFNULL(v.v_lname, '')
+          IFNULL(v.v_mname, '')
         ) AS name,
         CONCAT(
           IFNULL(b.barangay, ''), ', ',
@@ -623,7 +625,7 @@ export const getWardLeadersByCoordinator = async (req: Request, res: Response) =
       FROM 
         leaders l
       JOIN 
-        v_info v ON l.v_id = v.v_id
+        v_info v ON l.v_id = v.v_id AND v.record_type = 1
       LEFT JOIN 
         barangays b ON v.barangayId = b.id
       WHERE 
@@ -660,28 +662,28 @@ export const getWardLeadersByCoordinator = async (req: Request, res: Response) =
 const getPoliticianNames = async () => {
   // Get all congressman data
   const congressmen = await sequelize.query(
-    `SELECT id, CONCAT(FirstName, ' ', LastName) as full_name, LastName 
+    `SELECT id, CONCAT(LastName, ', ', FirstName) as full_name, LastName 
      FROM congressman`,
     { type: QueryTypes.SELECT }
   ) as Array<{ id: number; full_name: string; LastName: string }>;
   
   // Get all governor data
   const governors = await sequelize.query(
-    `SELECT id, CONCAT(FirstName, ' ', LastName) as full_name, LastName 
+    `SELECT id, CONCAT(LastName, ', ', FirstName) as full_name, LastName 
      FROM governor`,
     { type: QueryTypes.SELECT }
   ) as Array<{ id: number; full_name: string; LastName: string }>;
   
   // Get all vice governor data
   const viceGovernors = await sequelize.query(
-    `SELECT id, CONCAT(FirstName, ' ', LastName) as full_name, LastName 
+    `SELECT id, CONCAT(LastName, ', ', FirstName) as full_name, LastName 
      FROM vice_governor`,
     { type: QueryTypes.SELECT }
   ) as Array<{ id: number; full_name: string; LastName: string }>;
   
   // Get all mayor data
   const mayors = await sequelize.query(
-    `SELECT id, CONCAT(FirstName, ' ', LastName) as full_name, LastName 
+    `SELECT id, CONCAT(LastName, ', ', FirstName) as full_name, LastName 
      FROM mayor`,
     { type: QueryTypes.SELECT }
   ) as Array<{ id: number; full_name: string; LastName: string }>;
@@ -708,61 +710,98 @@ const getPoliticianNames = async () => {
 export const getHouseholdsForPrinting = async (req: Request, res: Response) => {
   try {
     // Extract filter parameters from the request query
-    const { municipality, barangay, purok_st, limit = '50' } = req.query;
+    const { municipality, barangay, purok_st, limit = '50', sortBy = 'purok_lastname' } = req.query;
     
     // Parse limit parameter
     const printLimit = parseInt(limit as string, 10);
     
-    // Build WHERE clauses based on filters for ward leaders
-    let leaderWhereClause = "l.type = 1 AND hh.leader_v_id IS NOT NULL";
+    // Build WHERE clauses based on filters - Match the report query structure
+    let whereConditions = [];
+    
+    // Always filter to ensure we have valid household heads
+    whereConditions.push('hh.fh_v_id IS NOT NULL');
     
     if (municipality) {
-      leaderWhereClause += ` AND b.municipality LIKE '%${municipality}%'`;
+      whereConditions.push(`b.municipality LIKE '%${municipality}%'`);
     }
     
     if (barangay) {
-      leaderWhereClause += ` AND b.barangay LIKE '%${barangay}%'`;
+      whereConditions.push(`b.barangay LIKE '%${barangay}%'`);
     }
+    
+    if (purok_st) {
+      whereConditions.push(`hh.purok_st = '${purok_st}'`);
+    }
+    
+    const whereClause = whereConditions.length > 0 
+      ? `WHERE ${whereConditions.join(' AND ')}` 
+      : '';
     
     // Get politician data for faster lookups
     const { congressmanMap, governorMap, viceGovernorMap, mayorMap } = await getPoliticianNames();
     
-    // Get ward leaders based on filters
-    const wardLeaders = await sequelize.query(
+    // Get households using the same query structure as getHouseholdsReport
+    const households = await sequelize.query(
       `SELECT 
-        v.v_id,
+        hh.id AS household_id,
+        hh.fh_v_id AS household_head_id,
         CONCAT(
+          IFNULL(v.v_lname, ''), ', ',
           IFNULL(v.v_fname, ''), ' ',
-          IFNULL(v.v_mname, ''), ' ',
-          IFNULL(v.v_lname, '')
-        ) AS full_name,
+          IFNULL(v.v_mname, '')
+        ) AS household_head_name,
         b.barangay,
-        b.municipality
+        b.municipality,
+        hh.purok_st AS street_address,
+        (
+          SELECT COUNT(*) 
+          FROM household_warding hw 
+          WHERE hw.fh_v_id = hh.fh_v_id
+        ) AS household_members_count,
+        hh.date_saved AS registration_date,
+        hh.is_printed,
+        (
+          SELECT CONCAT(
+            IFNULL(leader.v_lname, ''), ', ',
+            IFNULL(leader.v_fname, ''), ' ',
+            IFNULL(leader.v_mname, '')
+          )
+          FROM leaders l
+          JOIN v_info leader ON l.v_id = leader.v_id
+          WHERE l.v_id = hh.leader_v_id
+          LIMIT 1
+        ) AS ward_leader_name
       FROM 
-        leaders l
+        head_household hh
       JOIN 
-        v_info v ON l.v_id = v.v_id
-      LEFT JOIN
+        v_info v ON hh.fh_v_id = v.v_id
+      LEFT JOIN 
         barangays b ON v.barangayId = b.id
-      LEFT JOIN
-        head_household hh ON hh.leader_v_id = l.v_id
-      WHERE 
-        ${leaderWhereClause}
+      ${whereClause}
       GROUP BY 
-        v.v_id, v.v_fname, v.v_mname, v.v_lname, b.barangay, b.municipality
+        hh.id, hh.fh_v_id, v.v_fname, v.v_mname, v.v_lname, 
+        b.barangay, b.municipality, hh.purok_st, hh.date_saved, hh.is_printed
       ORDER BY 
-        b.municipality, b.barangay, v.v_lname, v.v_fname
-      LIMIT 100`,
+        ${sortBy === 'purok_lastname' 
+          ? 'hh.purok_st, v.v_lname, v.v_fname' 
+          : 'v.v_lname, v.v_fname, hh.purok_st'}
+      LIMIT ${printLimit}`,
       { type: QueryTypes.SELECT }
     ) as Array<{
-      v_id: number;
-      full_name: string;
+      household_id: number;
+      household_head_id: number;
+      household_head_name: string;
       barangay: string;
       municipality: string;
+      street_address: string;
+      household_members_count: number;
+      registration_date: string;
+      is_printed: number;
+      ward_leader_name: string;
     }>;
     
-    // If no ward leaders found, return empty array
-    if (!wardLeaders.length) {
+    // If no households found, return empty array
+    if (!households.length) {
       return res.json({
         status: 'success',
         data: []
@@ -771,340 +810,245 @@ export const getHouseholdsForPrinting = async (req: Request, res: Response) => {
     
     // Prepare result array for all households
     const result = [];
-    let totalHouseholds = 0;
     
-    // Process each ward leader sequentially
-    for (const leader of wardLeaders) {
-      // Skip if we've reached the limit
-      if (totalHouseholds >= printLimit) break;
-      
-      // Add purok_st filter condition
-      let householdWhereClause = `hh.leader_v_id = ? AND hh.is_printed = 0`;
-      
-      if (purok_st) {
-        householdWhereClause += ` AND hh.purok_st = '${purok_st}'`;
-      }
-      
-      // Get households for this leader with purok_st filter if provided
-      const households = await sequelize.query(
-        `SELECT DISTINCT
-          hh.id AS household_id,
+    // Process each household
+    for (const household of households) {
+      // Get members for this household using the household_head_id
+      const members = await sequelize.query(
+        `SELECT 
+          hw.id AS member_record_id,
+          hw.fh_v_id AS household_head_id,
           CONCAT(
-            IFNULL(hh_head.v_fname, ''), ' ',
-            IFNULL(hh_head.v_mname, ''), ' ',
-            IFNULL(hh_head.v_lname, '')
+            IFNULL(head.v_lname, ''), ', ',
+            IFNULL(head.v_fname, ''), ' ',
+            IFNULL(head.v_mname, '')
           ) AS household_head_name,
-          b.barangay AS location,
-          b.municipality,
-          hh.purok_st AS street_address,
-          (
-            SELECT COUNT(*) 
-            FROM household_warding hw 
-            WHERE hw.fh_v_id = hh.fh_v_id
-          ) AS household_members_count,
-          hh.date_saved AS registration_date,
-          hh.is_printed
-        FROM 
-          head_household hh
-        LEFT JOIN 
-          v_info hh_head ON hh.fh_v_id = hh_head.v_id
-        LEFT JOIN 
-          barangays b ON hh_head.barangayId = b.id
-        WHERE 
-          ${householdWhereClause}
-        GROUP BY
-          hh.id
-        ORDER BY 
-          b.municipality,
+          hw.mem_v_id AS member_id,
+          CONCAT(
+            IFNULL(member.v_lname, ''), ', ',
+            IFNULL(member.v_fname, ''), ' ',
+            IFNULL(member.v_mname, '')
+          ) AS member_name,
+          member.v_gender AS gender,
+          member.v_birthday AS birthdate,
+          TIMESTAMPDIFF(YEAR, member.v_birthday, CURDATE()) AS age,
+          member.v_precinct_no AS precinct_no,
           b.barangay,
-          household_head_name`,
+          b.municipality,
+          head_hh.purok_st AS street_address,
+          head_hh.date_saved AS registration_date,
+          head_hh.is_printed AS is_printed,
+          CASE 
+            WHEN hw.fh_v_id = hw.mem_v_id THEN 'Head of Household'
+            ELSE 'Member'
+          END AS household_role
+        FROM 
+          household_warding hw
+        JOIN 
+          v_info member ON hw.mem_v_id = member.v_id
+        JOIN 
+          v_info head ON hw.fh_v_id = head.v_id
+        LEFT JOIN 
+          barangays b ON member.barangayId = b.id
+        LEFT JOIN 
+          head_household head_hh ON hw.fh_v_id = head_hh.fh_v_id
+        WHERE 
+          hw.fh_v_id = ?
+        ORDER BY 
+          household_role DESC,
+          member.v_lname, member.v_fname, member.v_mname`,
         {
-          replacements: [leader.v_id],
+          replacements: [household.household_head_id],
           type: QueryTypes.SELECT
         }
       ) as Array<{
-        household_id: number;
+        member_record_id: number;
+        household_head_id: number;
         household_head_name: string;
-        location: string;
+        member_id: number;
+        member_name: string;
+        gender: string;
+        birthdate: string;
+        age: number;
+        precinct_no: string;
+        barangay: string;
         municipality: string;
         street_address: string;
-        household_members_count: number;
         registration_date: string;
         is_printed: number;
+        household_role: string;
       }>;
       
-      // For each household, process members
-      for (const household of households) {
-        // Skip if we've reached the limit
-        if (totalHouseholds >= printLimit) break;
+      // Get politics data for all household members
+      const memberIds = members.map(member => member.member_id);
+      
+      // Add the household head if not already in the list
+      if (!memberIds.includes(household.household_head_id)) {
+        memberIds.push(household.household_head_id);
+      }
+      
+      // Fetch politics data for all members
+      const politicsData = await sequelize.query(
+        `SELECT 
+          p.id,
+          p.v_id,
+          p.congressman,
+          p.governor,
+          p.vicegov,
+          p.mayor
+        FROM 
+          politics p
+        WHERE 
+          p.v_id IN (?)`,
+        {
+          replacements: [memberIds],
+          type: QueryTypes.SELECT
+        }
+      ) as Array<{
+        id: number;
+        v_id: number;
+        congressman: number;
+        governor: number;
+        vicegov: number;
+        mayor: number;
+      }>;
+      
+      // Create a map for faster lookups
+      const politicsMap = new Map();
+      politicsData.forEach(p => {
+        politicsMap.set(p.v_id, p);
+      });
+      
+      // Check if household head is included in members
+      const hasHeadInMembers = members.some(m => m.household_role === 'Head of Household');
+      
+      // Create a complete list of members that includes the head
+      let allMembers = [...members];
+      
+      // If head is not in members list, create a head entry from household data
+      if (!hasHeadInMembers) {
+        // Create a household head member entry
+        const headMember = {
+          member_record_id: 0,
+          household_head_id: household.household_head_id,
+          household_head_name: household.household_head_name,
+          member_id: household.household_head_id,
+          member_name: household.household_head_name,
+          gender: 'Unknown',
+          birthdate: '',
+          age: 0,
+          precinct_no: '',
+          barangay: household.barangay,
+          municipality: household.municipality,
+          street_address: household.street_address || '',
+          registration_date: household.registration_date,
+          is_printed: household.is_printed,
+          household_role: 'Head of Household'
+        };
         
-        // Get the fh_v_id (family head voter ID) for this household
-        // This is crucial for correctly fetching members
-        const householdHead = await sequelize.query(
-          `SELECT fh_v_id FROM head_household WHERE id = ?`,
-          {
-            replacements: [household.household_id],
-            type: QueryTypes.SELECT
-          }
+        // Add the head to the members list
+        allMembers.push(headMember);
+      }
+      
+      // Sort members to ensure the head is always first in the list
+      const sortedMembers = allMembers.sort((a, b) => {
+        if (a.household_role === 'Head of Household' && b.household_role !== 'Head of Household') return -1;
+        if (a.household_role !== 'Head of Household' && b.household_role === 'Head of Household') return 1;
+        return a.member_name.localeCompare(b.member_name);
+      });
+      
+      // Helper function to generate remarks based on politics data
+      const getRemarks = (memberId: number) => {
+        const politics = politicsMap.get(memberId);
+        
+        if (!politics) {
+          return 'NO DATA';
+        }
+        
+        // Check if all fields are null, undefined, or 0 (undecided)
+        const isUndecided = 
+          (!politics.congressman || politics.congressman === 0) && 
+          (!politics.governor || politics.governor === 0) && 
+          (!politics.vicegov || politics.vicegov === 0);
+        
+        // Also check for specific undecided IDs (679, 680, 681)
+        const hasUndecidedIds = 
+          politics.congressman === 679 && 
+          politics.governor === 680 && 
+          politics.vicegov === 681;
+        
+        if (isUndecided || hasUndecidedIds) {
+          return 'UNDECIDED(ALL 3)';
+        }
+        
+        // Check if voter supports the "straight" lineup (IDs as specified)
+        const straightLineup = (
+          politics.congressman === 660 && 
+          politics.governor === 662 && 
+          politics.vicegov === 676
         );
         
-        if (!householdHead || !householdHead.length) {
-          console.error(`No household head found for household ID ${household.household_id}`);
-          continue; // Skip this household if we can't find the head
+        if (straightLineup) {
+          return 'STRAIGHT';
         }
         
-        const fhVId = (householdHead[0] as any).fh_v_id;
+        // Otherwise, construct a comma-separated list of supported candidates
+        const supportedPoliticians = [];
         
-        // Now use the fh_v_id to get members for this household
-        const members = await sequelize.query(
-          `SELECT 
-            hw.id AS member_record_id,
-            hw.fh_v_id AS household_head_id,
-            CONCAT(
-              IFNULL(head.v_fname, ''), ' ',
-              IFNULL(head.v_mname, ''), ' ',
-              IFNULL(head.v_lname, '')
-            ) AS household_head_name,
-            hw.mem_v_id AS member_id,
-            CONCAT(
-              IFNULL(member.v_fname, ''), ' ',
-              IFNULL(member.v_mname, ''), ' ',
-              IFNULL(member.v_lname, '')
-            ) AS member_name,
-            member.v_gender AS gender,
-            member.v_birthday AS birthdate,
-            TIMESTAMPDIFF(YEAR, member.v_birthday, CURDATE()) AS age,
-            member.v_precinct_no AS precinct_no,
-            b.barangay,
-            b.municipality,
-            head_hh.purok_st AS street_address,
-            head_hh.date_saved AS registration_date,
-            head_hh.is_printed AS is_printed,
-            CASE 
-              WHEN hw.fh_v_id = hw.mem_v_id THEN 'Head of Household'
-              ELSE 'Member'
-            END AS household_role
-          FROM 
-            household_warding hw
-          JOIN 
-            v_info member ON hw.mem_v_id = member.v_id
-          JOIN 
-            v_info head ON hw.fh_v_id = head.v_id
-          LEFT JOIN 
-            barangays b ON member.barangayId = b.id
-          LEFT JOIN 
-            head_household head_hh ON hw.fh_v_id = head_hh.fh_v_id
-          WHERE 
-            hw.fh_v_id = ?
-          ORDER BY 
-            household_role DESC,
-            member_name`,
-          {
-            replacements: [fhVId], // Using fh_v_id instead of household_id
-            type: QueryTypes.SELECT
-          }
-        ) as Array<{
-          member_record_id: number;
-          household_head_id: number;
-          household_head_name: string;
-          member_id: number;
-          member_name: string;
-          gender: string;
-          birthdate: string;
-          age: number;
-          precinct_no: string;
-          barangay: string;
-          municipality: string;
-          street_address: string;
-          registration_date: string;
-          is_printed: number;
-          household_role: string;
-        }>;
-        
-        // Get politics data for all household members
-        const memberIds = members.map(member => member.member_id);
-        
-        // Add the household head if not already in the list
-        if (!memberIds.includes(fhVId)) {
-          memberIds.push(fhVId);
+        // Check if congressman is one of the undecided IDs
+        if (politics.congressman === 679) {
+          supportedPoliticians.push('UNDECIDED');
+        } else if (politics.congressman && politics.congressman !== 0 && congressmanMap.has(politics.congressman)) {
+          supportedPoliticians.push(congressmanMap.get(politics.congressman)?.LastName || '');
+        } else if (politics.congressman === 0 || politics.congressman === null) {
+          supportedPoliticians.push('UNDECIDED');
         }
         
-        // Fetch politics data for all members
-        const politicsData = await sequelize.query(
-          `SELECT 
-            p.id,
-            p.v_id,
-            p.congressman,
-            p.governor,
-            p.vicegov,
-            p.mayor
-          FROM 
-            politics p
-          WHERE 
-            p.v_id IN (?)`,
-          {
-            replacements: [memberIds],
-            type: QueryTypes.SELECT
-          }
-        ) as Array<{
-          id: number;
-          v_id: number;
-          congressman: number;
-          governor: number;
-          vicegov: number;
-          mayor: number;
-        }>;
-        
-        // Create a map for faster lookups
-        const politicsMap = new Map();
-        politicsData.forEach(p => {
-          politicsMap.set(p.v_id, p);
-        });
-        
-        // Add diagnostic logging
-        console.log(`Household ${household.household_id}: Using fh_v_id=${fhVId}, found ${members.length} members`);
-        if (members.length > 0) {
-          console.log(`Members: ${members.map(m => `${m.member_name} (${m.household_role})`).join(', ')}`);
+        // Check if governor is one of the undecided IDs
+        if (politics.governor === 680) {
+          supportedPoliticians.push('UNDECIDED');
+        } else if (politics.governor && politics.governor !== 0 && governorMap.has(politics.governor)) {
+          supportedPoliticians.push(governorMap.get(politics.governor)?.LastName || '');
+        } else if (politics.governor === 0 || politics.governor === null) {
+          supportedPoliticians.push('UNDECIDED');
         }
         
-        // Check if household head is included in members
-        const hasHeadInMembers = members.some(m => m.household_role === 'Head of Household');
-        
-        // Create a complete list of members that includes the head
-        let allMembers = [...members];
-        
-        // If head is not in members list, create a head entry from household data
-        if (!hasHeadInMembers) {
-          // Create a household head member entry
-          const headMember = {
-            member_record_id: 0,
-            household_head_id: household.household_id,
-            household_head_name: household.household_head_name,
-            member_id: fhVId,
-            member_name: household.household_head_name,
-            gender: 'Unknown',
-            birthdate: '',
-            age: 0,
-            precinct_no: '',
-            barangay: household.location,
-            municipality: household.municipality,
-            street_address: household.street_address || '',
-            registration_date: household.registration_date,
-            is_printed: household.is_printed,
-            household_role: 'Head of Household'
-          };
-          
-          // Add the head to the members list
-          allMembers.push(headMember);
+        // Check if vice governor is one of the undecided IDs
+        if (politics.vicegov === 681) {
+          supportedPoliticians.push('UNDECIDED');
+        } else if (politics.vicegov && politics.vicegov !== 0 && viceGovernorMap.has(politics.vicegov)) {
+          supportedPoliticians.push(viceGovernorMap.get(politics.vicegov)?.LastName || '');
+        } else if (politics.vicegov === 0 || politics.vicegov === null) {
+          supportedPoliticians.push('UNDECIDED');
         }
         
-        // Sort members to ensure the head is always first in the list
-        const sortedMembers = allMembers.sort((a, b) => {
-          if (a.household_role === 'Head of Household' && b.household_role !== 'Head of Household') return -1;
-          if (a.household_role !== 'Head of Household' && b.household_role === 'Head of Household') return 1;
-          return a.member_name.localeCompare(b.member_name);
-        });
-        
-        // Helper function to generate remarks based on politics data
-        const getRemarks = (memberId: number) => {
-          const politics = politicsMap.get(memberId);
-          
-          if (!politics) {
-            return 'NO DATA';
-          }
-          
-          // Check if all fields are null, undefined, or 0 (undecided)
-          const isUndecided = 
-            (!politics.congressman || politics.congressman === 0) && 
-            (!politics.governor || politics.governor === 0) && 
-            (!politics.vicegov || politics.vicegov === 0);
-          
-          // Also check for specific undecided IDs (679, 680, 681)
-          const hasUndecidedIds = 
-            politics.congressman === 679 && 
-            politics.governor === 680 && 
-            politics.vicegov === 681;
-          
-          if (isUndecided || hasUndecidedIds) {
-            return 'UNDECIDED(ALL 3)';
-          }
-          
-          // Check if voter supports the "straight" lineup (IDs as specified)
-          const straightLineup = (
-            politics.congressman === 660 && 
-            politics.governor === 662 && 
-            politics.vicegov === 676
-          );
-          
-          if (straightLineup) {
-            return 'STRAIGHT';
-          }
-          
-          // Otherwise, construct a comma-separated list of supported candidates
-          const supportedPoliticians = [];
-          
-          // Check if congressman is one of the undecided IDs
-          if (politics.congressman === 679) {
-            supportedPoliticians.push('UNDECIDED');
-          } else if (politics.congressman && politics.congressman !== 0 && congressmanMap.has(politics.congressman)) {
-            supportedPoliticians.push(congressmanMap.get(politics.congressman)?.LastName || '');
-          } else if (politics.congressman === 0 || politics.congressman === null) {
-            supportedPoliticians.push('UNDECIDED');
-          }
-          
-          // Check if governor is one of the undecided IDs
-          if (politics.governor === 680) {
-            supportedPoliticians.push('UNDECIDED');
-          } else if (politics.governor && politics.governor !== 0 && governorMap.has(politics.governor)) {
-            supportedPoliticians.push(governorMap.get(politics.governor)?.LastName || '');
-          } else if (politics.governor === 0 || politics.governor === null) {
-            supportedPoliticians.push('UNDECIDED');
-          }
-          
-          // Check if vice governor is one of the undecided IDs
-          if (politics.vicegov === 681) {
-            supportedPoliticians.push('UNDECIDED');
-          } else if (politics.vicegov && politics.vicegov !== 0 && viceGovernorMap.has(politics.vicegov)) {
-            supportedPoliticians.push(viceGovernorMap.get(politics.vicegov)?.LastName || '');
-          } else if (politics.vicegov === 0 || politics.vicegov === null) {
-            supportedPoliticians.push('UNDECIDED');
-          }
-          
-          return supportedPoliticians.length > 0 
-            ? supportedPoliticians.join(', ') 
-            : 'NO PREFERENCE';
-        };
-        
-        // Format household for printing with members array
-        const printHousehold = {
-          householdId: household.household_id,
-          householdNumber: household.household_id.toString().padStart(3, '0'),
-          wardLeader: leader.full_name || 'UNASSIGNED',
-          members: sortedMembers.map(member => ({
-            name: member.member_name.toUpperCase(),
-            position: member.household_role === 'Head of Household' ? 'HH Head' : 'Member',
-            remarks: getRemarks(member.member_id)
-          })),
-          receivedBy: {
-            name: '',
-            signature: '',
-            position: '',
-            timeSigned: ''
-          }
-        };
-        
-        // If there are no regular members (only the head), add a "No household members" row
-        if (sortedMembers.length === 1 && sortedMembers[0].household_role === 'Head of Household') {
-          printHousehold.members.push({
-            name: 'NO HOUSEHOLD MEMBERS',
-            position: '-',
-            remarks: '-'
-          });
+        return supportedPoliticians.length > 0 
+          ? supportedPoliticians.join(', ') 
+          : 'NO PREFERENCE';
+      };
+      
+      // Format household for printing with members array
+      const printHousehold = {
+        householdId: household.household_id,
+        householdNumber: household.household_id.toString().padStart(3, '0'),
+        wardLeader: household.ward_leader_name || 'UNASSIGNED',
+        members: sortedMembers.map(member => ({
+          name: member.member_name.toUpperCase(),
+          position: member.household_role === 'Head of Household' ? 'HH Head' : 'Member',
+          remarks: getRemarks(member.member_id),
+          municipality: member.municipality,
+          barangay: member.barangay,
+          street_address: member.street_address
+        })),
+        receivedBy: {
+          name: '',
+          signature: '',
+          position: '',
+          timeSigned: ''
         }
-        
-        result.push(printHousehold);
-        totalHouseholds++;
-      }
+      };
+      
+      result.push(printHousehold);
     }
     
     return res.json({
@@ -1215,7 +1159,7 @@ export const getWardLeadersForPrinting = async (req: Request, res: Response) => 
     
     // Combine all WHERE conditions
     const whereClause = whereConditions.length > 0 
-      ? `WHERE ${whereConditions.join(' AND ')}`
+      ? `WHERE ${whereConditions.join(' AND ')}` 
       : '';
     
     // Fetch ward leaders with voter information - using latest entry based on dateadded
@@ -1240,17 +1184,14 @@ export const getWardLeadersForPrinting = async (req: Request, res: Response) => 
         CONCAT(v.v_lname, ', ', v.v_fname, ' ', IFNULL(v.v_mname, '')) AS full_name
       FROM 
         leaders l
-      JOIN 
-        v_info v ON l.v_id = v.v_id
-      LEFT JOIN 
+      INNER JOIN 
+        v_info v ON l.v_id = v.v_id AND v.record_type = 1
+      INNER JOIN 
         barangays b ON v.barangayId = b.id
-      INNER JOIN (
-        SELECT v_id, MAX(dateadded) as latest_date
-        FROM leaders
-        WHERE type = 1
-        GROUP BY v_id
-      ) latest ON l.v_id = latest.v_id AND l.dateadded = latest.latest_date
-      ${whereClause}
+      LEFT JOIN 
+        head_household hh ON hh.leader_v_id = l.v_id
+      WHERE 
+        ${whereClause}
       ORDER BY 
         b.municipality ASC, b.barangay ASC, v.v_lname ASC, v.v_fname ASC
       LIMIT ${recordLimit}`,
@@ -1515,20 +1456,19 @@ export const getBarangayCoordinatorsForPrinting = async (req: Request, res: Resp
     
     // Combine all WHERE conditions
     const whereClause = whereConditions.length > 0 
-      ? `WHERE ${whereConditions.join(' AND ')}`
+      ? `WHERE ${whereConditions.join(' AND ')}` 
       : '';
     
     // Fetch barangay coordinators with voter information - only get the latest entry for each v_id based on dateadded
     const barangayCoordinators = await sequelize.query(
       `SELECT 
-        l.id AS leader_id,
-        l.v_id,
-        l.type,
-        l.electionyear,
-        l.status,
-        l.is_printed,
-        l.is_Received,
-        l.dateadded,
+        bc.id AS coordinator_id,
+        bc.v_id,
+        bc.electionyear,
+        bc.status,
+        bc.is_printed,
+        bc.is_Received,
+        bc.dateadded,
         v.v_lname,
         v.v_fname,
         v.v_mname,
@@ -1539,17 +1479,17 @@ export const getBarangayCoordinatorsForPrinting = async (req: Request, res: Resp
         b.municipality,
         CONCAT(v.v_lname, ', ', v.v_fname, ' ', IFNULL(v.v_mname, '')) AS full_name
       FROM 
-        leaders l
-      INNER JOIN 
-        v_info v ON l.v_id = v.v_id
-      INNER JOIN 
+        barangay_coordinators bc
+      JOIN 
+        v_info v ON bc.v_id = v.v_id AND v.record_type = 1
+      LEFT JOIN 
         barangays b ON v.barangayId = b.id
       INNER JOIN (
         SELECT v_id, MAX(dateadded) as latest_date
-        FROM leaders
+        FROM barangay_coordinators
         WHERE type = 2
         GROUP BY v_id
-      ) latest ON l.v_id = latest.v_id AND l.dateadded = latest.latest_date
+      ) latest ON bc.v_id = latest.v_id AND bc.dateadded = latest.latest_date
       ${whereClause}
       ORDER BY 
         b.municipality ASC, b.barangay ASC, v.v_lname ASC, v.v_fname ASC
@@ -1675,8 +1615,8 @@ export const getBarangayCoordinatorsForPrinting = async (req: Request, res: Resp
       const politics = politicsMap.get(coordinator.v_id);
       
       return {
-        leaderId: coordinator.leader_id,
-        wardLeaderNumber: coordinator.leader_id.toString().padStart(3, '0'),
+        leaderId: coordinator.coordinator_id,
+        wardLeaderNumber: coordinator.coordinator_id.toString().padStart(3, '0'),
         v_id: coordinator.v_id,
         name: `${coordinator.v_lname}, ${coordinator.v_fname} ${coordinator.v_mname || ''}`.trim().toUpperCase(),
         precinct: coordinator.v_precinct_no || 'N/A',
@@ -1746,7 +1686,7 @@ export const markBarangayCoordinatorsAsPrinted = async (req: Request, res: Respo
     
     // Update the is_printed status for all provided leader IDs
     const [updatedCount] = await sequelize.query(
-      `UPDATE leaders 
+      `UPDATE barangay_coordinators 
        SET is_printed = 1
        WHERE id IN (?) AND type = 2`,
       {
@@ -1814,7 +1754,7 @@ export const getHouseholdsReport = async (req: Request, res: Response) => {
         v.v_fname LIKE '%${name}%' OR 
         v.v_mname LIKE '%${name}%' OR 
         v.v_lname LIKE '%${name}%' OR
-        CONCAT(v.v_fname, ' ', v.v_mname, ' ', v.v_lname) LIKE '%${name}%'
+        CONCAT(v.v_lname, ', ', v.v_fname, ' ', v.v_mname) LIKE '%${name}%'
       )`);
     }
     
@@ -1872,9 +1812,9 @@ export const getHouseholdsReport = async (req: Request, res: Response) => {
         hh.id AS household_id,
         hh.fh_v_id AS household_head_id,
         CONCAT(
+          IFNULL(v.v_lname, ''), ', ',
           IFNULL(v.v_fname, ''), ' ',
-          IFNULL(v.v_mname, ''), ' ',
-          IFNULL(v.v_lname, '')
+          IFNULL(v.v_mname, '')
         ) AS household_head_name,
         b.barangay,
         b.municipality,
@@ -1897,7 +1837,9 @@ export const getHouseholdsReport = async (req: Request, res: Response) => {
         hh.id, hh.fh_v_id, v.v_fname, v.v_mname, v.v_lname, 
         b.barangay, b.municipality, hh.purok_st, hh.date_saved, hh.is_printed
       ORDER BY 
-        ${sortBy} ${sortOrder}
+        ${sortBy === 'household_head_name' 
+          ? `v.v_lname ${sortOrder}, v.v_fname ${sortOrder}, v.v_mname ${sortOrder}` 
+          : `${sortBy} ${sortOrder}`}
       LIMIT ${pageSize} OFFSET ${offset}
     `;
     
@@ -2014,8 +1956,7 @@ export const getWardLeadersStatistics = async (req: Request, res: Response) => {
        AND l.electionyear = 2025
        ${municipality ? ` AND b.municipality LIKE '%${municipality}%'` : ''}
        ${barangay ? ` AND b.barangay LIKE '%${barangay}%'` : ''}
-    ) AS 'total'
-`,
+    ) AS 'total'`,
       { type: QueryTypes.SELECT }
     );
     

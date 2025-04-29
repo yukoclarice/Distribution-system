@@ -39,14 +39,26 @@ export const WardLeaderPrintTemplate = forwardRef<HTMLDivElement, WardLeaderPrin
       });
     };
 
-    const renderWardLeaderTemplate = (leader: PrintWardLeaderData, index: number, isLastInGroup: boolean) => {
+    const renderWardLeaderTemplate = (leader: PrintWardLeaderData, index: number, isLastInGroup: boolean, globalIndex: number) => {
       return (
         <div key={`leader-${leader.leaderId}-${index}`} className="template-section">
-          <div className="print-layout">
+          <div className="print-layout relative">
+            {/* Item number indicator */}
+            <div className="item-number-indicator">{globalIndex + 1}</div>
+            
             {/* Left Column - Ward Leader Information */}
             <div className="print-left-column">
               {/* Ward Leader Number Header */}
               <h1 className="text-lg font-bold mb-3">Ward Leader ID: #{leader.v_id}</h1>
+              
+              {/* Address Display */}
+              <div className="text-right text-xs mb-2">
+                {leader.municipality && leader.barangay && (
+                  <div>
+                    {leader.municipality}, {leader.barangay}
+                  </div>
+                )}
+              </div>
               
               {/* Voting Preference Table */}
               <div className="print-voting-table-container mt-3">
@@ -309,13 +321,34 @@ export const WardLeaderPrintTemplate = forwardRef<HTMLDivElement, WardLeaderPrin
             page-break-after: always;
             height: 0;
           }
+          /* Item number indicator styling */
+          .item-number-indicator {
+            position: absolute;
+            top: 0cm;
+            right: 0.2cm;
+            font-size: 0.5rem;
+            font-weight: bold;
+            color: #000;
+            z-index: 100;
+            background-color: white;
+            padding: 0 1px;
+          }
+          .relative {
+            position: relative;
+          }
         `}</style>
         
         {/* Render each group of 3 ward leaders on a separate sheet */}
         {leaderGroups.map((group, groupIndex) => (
           <div key={`group-${groupIndex}`} className="print-page">
+
             {group.map((leader, index) => 
-              renderWardLeaderTemplate(leader, index, index === group.length - 1)
+              renderWardLeaderTemplate(
+                leader, 
+                index, 
+                index === group.length - 1,
+                groupIndex * 3 + index
+              )
             )}
             {groupIndex < leaderGroups.length - 1 && <div className="sheet-page-break"></div>}
           </div>

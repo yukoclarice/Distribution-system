@@ -473,7 +473,7 @@ export function WardLeadersReport() {
     }
   }, [expandedHouseholds, membersByHousehold]);
 
-  // Component for ward leader row - unchanged
+  // Component for ward leader row - updated to handle last name first format
   const LeaderRow = useCallback(({ leader }: { leader: WardLeader }) => {
     return (
       <TableRow 
@@ -490,7 +490,8 @@ export function WardLeadersReport() {
             />
             <Avatar className="h-8 w-8 mr-2 border border-border/20 shadow-sm">
               <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                {leader.full_name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                {/* Extract initials from last name, first name format */}
+                {leader.full_name.split(',').map(part => part.trim()[0]).join('').substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div>

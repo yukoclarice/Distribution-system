@@ -1,6 +1,25 @@
 import { forwardRef } from "react";
 import { QRCodeSVG } from 'qrcode.react';
-import { PrintHouseholdData } from "@/lib/api";
+
+type PrintHouseholdData = {
+  householdId: number;
+  householdNumber: string;
+  wardLeader: string;
+  members: Array<{
+    name: string;
+    position: string;
+    remarks: string;
+    municipality?: string;
+    barangay?: string;
+    street_address?: string;
+  }>;
+  receivedBy: {
+    name: string;
+    signature: string;
+    position: string;
+    timeSigned: string;
+  };
+};
 
 type HouseholdPrintTemplateProps = {
   households?: PrintHouseholdData[];
@@ -25,7 +44,7 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
     }
 
     // Group households into sets of 3 for printing (3 per sheet)
-    const householdGroups = [];
+    const householdGroups: PrintHouseholdData[][] = [];
     for (let i = 0; i < households.length; i += 3) {
       householdGroups.push(households.slice(i, i + 3));
     }
@@ -43,18 +62,33 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
       });
     };
 
-    const renderHouseholdTemplate = (household: PrintHouseholdData, index: number, isLastInGroup: boolean) => {
+    const renderHouseholdTemplate = (household: PrintHouseholdData, index: number, isLastInGroup: boolean, globalIndex: number) => {
       // Check for different member count thresholds
-      const hasLargeMembers = household.members.length > 9 && household.members.length <= 12;
       const hasExtraLargeMembers = household.members.length > 12;
-      
+      const hasLargeMembers = household.members.length > 9;
+      const headMember = household.members.find(member => member.position === 'HH Head');
+
       return (
         <div key={`household-${household.householdId}-${index}`} className="template-section">
-          <div className="print-layout">
+          <div className="print-layout relative">
+            {/* Item number indicator */}
+            <div className="item-number-indicator">{globalIndex + 1}</div>
+            
             {/* Left Column - Household Information */}
             <div className="print-left-column">
               {/* Household Number Header */}
-              <h1 className={`text-lg font-bold ${hasExtraLargeMembers ? 'mb-1' : 'mb-3'}`}>Household #{household.householdNumber}</h1>
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="font-bold">Household No.:</span> {household.householdNumber}
+                </div>
+                <div className="text-right text-xs">
+                  {headMember?.municipality && headMember?.barangay && headMember?.street_address && (
+                    <div>
+                      {headMember.municipality}, {headMember.barangay}, Purok {headMember.street_address}
+                    </div>
+                  )}
+                </div>
+              </div>
               
               {/* Table with fixed columns */}
               <div className="print-table-container">
@@ -91,24 +125,24 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
                   </tbody>
                 </table>
               </div>
-              
+          
               {/* Ward Leader Information at bottom */}
               <div className="ward-leader-info">
                 Ward Leader: {household.wardLeader}
               </div>
             </div>
-            
+        
             {/* Right Column - Received By Section */}
             <div className="print-right-column">
-              <h1 className={`text-lg font-bold ${hasExtraLargeMembers ? 'mb-1' : 'mb-3'}`}>Received by:</h1>
+              <h1 className={`text-lg font-bold mb-5 received-by-header`}>Received by:</h1>
               
-              <div className={`print-signature-section ${hasExtraLargeMembers ? 'mt-2 extra-compact-signature' : 'mt-4'}`}>
+              <div className={`print-signature-section mt-4`}>
                 <div className="print-signature-line">
                   <div className="print-signature-underline"></div>
                   <p className="print-signature-label">Name</p>
                 </div>
                 
-                <div className="print-signature-line mt-1">
+                <div className="print-signature-line mt-4">
                   <div className="print-signature-underline"></div>
                   <p className="print-signature-label">Signature</p>
                 </div>
@@ -121,7 +155,7 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
                   <p className="print-signature-label">Position</p>
                 </div>
                 
-                <div className="print-signature-line mt-1">
+                <div className="print-signature-line mt-4">
                   <div className="print-signature-underline"></div>
                   <p className="print-signature-label">Time signed</p>
                 </div>
@@ -158,6 +192,7 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
           @page { 
             size: 8.5in 13in; 
             margin: 0mm; /* Remove browser margins to prevent headers/footers */
+            //padding: 0;
           }
           html, body { 
             margin: 0 !important; 
@@ -172,19 +207,29 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
             page-break-after: always; 
             height: 100%;
             width: 100%;
-            padding: 0.5cm;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            /* 11 inches = 27.94cm, minus 1cm for padding (0.5cm top + 0.5cm bottom) */
+            min-height: 28cm;
+            max-height: 28cm;
+            overflow: hidden;
           }
           .template-section {
-            height: calc(33.33% - 0.6cm);
-            margin-bottom: 0.3cm;
+            height: calc(33.6%);
+            // margin-bottom: 0.3cm;
+            /* Set a fixed height to ensure consistency */
+            min-height: 9cm;
+            max-height: 9cm;
+            overflow: visible; /* Changed from hidden to visible to show dividers */
           }
           .template-divider {
             border-top: 1px dashed #000;
-            margin: 0.3cm 0;
+            // margin: 0.3cm 0;
             width: 100%;
+            display: block; /* Ensure it's displayed as a block */
+            position: relative; /* Add positioning context */
+            z-index: 10; /* Ensure it appears above other content */
           }
           .print-layout {
             display: flex;
@@ -203,6 +248,8 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
           .print-right-column {
             flex: 1;
             padding-left: 0.5rem;
+            padding-top: 0;
+            margin-top: 0;
             display: flex;
             flex-direction: column;
           }
@@ -215,6 +262,7 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
             font-size: 0.5rem;
             margin-bottom: 0.3rem;
             justify-content: space-around;
+            height: 1rem; /* Set fixed height for all header modes */
           }
           .name-column {
             flex: 0 0 40%;
@@ -234,8 +282,6 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
           }
           .print-table td {
             border: 1px solid #000;
-            padding: 0.2rem;
-            height: 1.5rem;
             font-size: 0.5rem;
           }
           .print-row-number {
@@ -267,8 +313,9 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
           
           /* Compact styles for tables with more than 9 members */
           .compact-header {
-            font-size: 0.4rem;
+            font-size: 0.6rem;
             margin-bottom: 0.2rem;
+            height: 1rem; /* Maintain the same height */
           }
           .compact-table td {
             padding: 0.1rem;
@@ -283,6 +330,7 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
           .extra-compact-header {
             font-size: 0.35rem;
             margin-bottom: 0.1rem;
+            height: 1rem; /* Maintain the same height */
           }
           .extra-compact-table td {
             padding: 0.05rem;
@@ -318,9 +366,6 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
           .extra-compact-signature .print-signature-line {
             margin-bottom: 0.5rem;
           }
-          .extra-compact-signature .print-signature-label {
-            font-size: 0.6rem;
-          }
           .extra-compact-signature .position-legend {
             font-size: 0.5rem;
             margin-bottom: 0.1rem;
@@ -330,9 +375,8 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
           }
           
           .ward-leader-info {
-            font-size: 0.9rem;
+            font-size: 0.5rem;
             font-weight: bold;
-            margin-top: 0.7rem;
           }
           .position-legend {
             font-size: 0.6rem;
@@ -362,13 +406,40 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
             page-break-after: always;
             height: 0;
           }
+          /* Item number indicator styling */
+          .item-number-indicator {
+            position: absolute;
+            top: 0cm;
+            right: 0.2cm;
+            font-size: 0.5rem;
+            font-weight: bold;
+            color: #000;
+            z-index: 100;
+            background-color: white;
+            padding: 0 1px;
+          }
+          .relative {
+            position: relative;
+          }
+          /* Add new style for the Received by header */
+          .received-by-header {
+            margin-top: 0;
+            padding-top: 0;
+            line-height: 1;
+          }
         `}</style>
         
         {/* Render each group of 3 households on a separate sheet */}
         {householdGroups.map((group, groupIndex) => (
           <div key={`group-${groupIndex}`} className="print-page">
+
             {group.map((household, index) => 
-              renderHouseholdTemplate(household, index, index === group.length - 1)
+              renderHouseholdTemplate(
+                household, 
+                index, 
+                index === group.length - 1, 
+                groupIndex * 3 + index
+              )
             )}
             {groupIndex < householdGroups.length - 1 && <div className="sheet-page-break"></div>}
           </div>
@@ -377,5 +448,7 @@ export const HouseholdPrintTemplate = forwardRef<HTMLDivElement, HouseholdPrintT
     );
   }
 );
+
+HouseholdPrintTemplate.displayName = "HouseholdPrintTemplate";
 
 export default HouseholdPrintTemplate; 

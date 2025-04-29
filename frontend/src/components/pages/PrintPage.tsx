@@ -60,7 +60,9 @@ export function PrintPage() {
   const [municipality, setMunicipality] = useState<string>("all");
   const [barangay, setBarangay] = useState<string>("all");
   const [purok, setPurok] = useState<string>("all");
-  const [householdLimit, setHouseholdLimit] = useState<string>("50");
+  const [householdLimit, setHouseholdLimit] = useState<string>("500");
+  // New state for sorting preference
+  const [sortBy, setSortBy] = useState<string>("purok_lastname");
   
   // Filtered barangay options based on selected municipality
   const [filteredBarangays, setFilteredBarangays] = useState<{ barangay: string; municipality: string }[]>([]);
@@ -285,6 +287,7 @@ export function PrintPage() {
     setBarangay("all");
     setPurok("all");
     setHouseholdLimit("50");
+    setSortBy("purok_lastname"); // Reset sorting preference
     
     // Small delay to show the filtering state
     setTimeout(() => {
@@ -350,10 +353,11 @@ export function PrintPage() {
         municipality: municipality !== "all" ? municipality : undefined,
         barangay: barangay !== "all" ? barangay : undefined,
         purok_st: purok !== "all" ? purok : undefined,
-        limit: parseInt(householdLimit, 10)
+        limit: parseInt(householdLimit, 10),
+        sortBy: sortBy // Add sorting parameter
       };
       
-      console.log("Fetching print data with filters:", filterParams);
+
       
       if (printType === "household") {
         // Fetch real household data from the API
@@ -422,7 +426,7 @@ export function PrintPage() {
     } finally {
       setFetchingData(false);
     }
-  }, [printType, municipality, barangay, purok, householdLimit]);
+  }, [printType, municipality, barangay, purok, householdLimit, sortBy]);
   
   // Handle print for multiple items
   const handlePrint = useCallback(async () => {
@@ -436,12 +440,20 @@ export function PrintPage() {
           municipality: municipality !== "all" ? municipality : undefined,
           barangay: barangay !== "all" ? barangay : undefined,
           purok_st: purok !== "all" ? purok : undefined,
-          limit: parseInt(householdLimit, 10)
+          limit: parseInt(householdLimit, 10),
+          sortBy: sortBy // Add sorting parameter
         };
         
+
+        
         if (printType === "household") {
+
           // Get household data directly from the function result
           const fetchedData = await getHouseholdDataForPrintingDirect(filterParams, { bypassCache: true });
+          
+          // Log the total number of households to be printed
+          console.log(`Total households to be printed: ${fetchedData?.length || 0}`);
+          
           
           if (!fetchedData || fetchedData.length === 0) {
             setError("No household data found with the selected filters");
@@ -453,12 +465,23 @@ export function PrintPage() {
           setPrintHouseholdData(fetchedData);
           printHouseholdDataRef.current = fetchedData;
           
-          // Also update the first household in printData state for UI consistency
-          setPrintData(fetchedData[0]);
-          setCurrentItemIndex(0);
+
+          
+          // Wait for state update to complete
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+
+          // Now trigger the print process
+          setIsPrinting(true);
+          printToPDF();
         } else if (printType === "wardleader") {
+
           // Get ward leader data directly from the function result
           const fetchedData = await getWardLeaderDataForPrinting(filterParams, { bypassCache: true });
+          
+          // Log the total number of ward leaders to be printed
+          console.log(`Total ward leaders to be printed: ${fetchedData?.length || 0}`);
+          
           
           if (!fetchedData || fetchedData.length === 0) {
             setError("No ward leader data found with the selected filters");
@@ -469,10 +492,24 @@ export function PrintPage() {
           // Store data in state for future use and in the ref for immediate access
           setPrintWardLeaderData(fetchedData);
           printWardLeaderDataRef.current = fetchedData;
-          setCurrentItemIndex(0);
+          
+
+          
+          // Wait for state update to complete
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+
+          // Now trigger the print process
+          setIsPrinting(true);
+          printToPDF();
         } else if (printType === "barangaycoordinator") {
+
           // Get barangay coordinator data directly from the function result
           const fetchedData = await getBarangayCoordinatorDataForPrinting(filterParams, { bypassCache: true });
+          
+          // Log the total number of barangay coordinators to be printed
+          console.log(`Total barangay coordinators to be printed: ${fetchedData?.length || 0}`);
+          
           
           if (!fetchedData || fetchedData.length === 0) {
             setError("No barangay coordinator data found with the selected filters");
@@ -483,19 +520,21 @@ export function PrintPage() {
           // Store data in state for future use and in the ref for immediate access
           setPrintBarangayCoordinatorData(fetchedData);
           printBarangayCoordinatorDataRef.current = fetchedData;
-          setCurrentItemIndex(0);
+          
+
+          
+          // Wait for state update to complete
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+
+          // Now trigger the print process
+          setIsPrinting(true);
+          printToPDF();
         } else {
           setError("This print type is not yet implemented");
           setFetchingData(false);
           return;
         }
-        
-        // Wait a moment to ensure DOM updates with new data
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
-        // Now trigger the print process
-        setIsPrinting(true);
-        printToPDF();
       } catch (err: any) {
         console.error("Error fetching or printing data:", err);
         setError(err.message || "Failed to fetch or print data");
@@ -508,7 +547,7 @@ export function PrintPage() {
       setFetchingData(false);
       setIsPrinting(false);
     }
-  }, [printType, municipality, barangay, purok, householdLimit, printToPDF]);
+  }, [printType, municipality, barangay, purok, householdLimit, printToPDF, sortBy]);
   
   // Handle confirmation of successful printing
   const handlePrintConfirm = async () => {
@@ -622,6 +661,7 @@ export function PrintPage() {
     <div className="space-y-6">
       {/* Hidden component that will be used for printing households */}
       <div style={{ display: "none" }}>
+
         <HouseholdPrintTemplate
           ref={householdPrintRef}
           households={printHouseholdDataRef.current}
@@ -636,6 +676,7 @@ export function PrintPage() {
       
       {/* Hidden component that will be used for printing ward leaders */}
       <div style={{ display: "none" }}>
+
         <WardLeaderPrintTemplate
           ref={wardLeaderPrintRef}
           wardLeaders={printWardLeaderDataRef.current}
@@ -650,6 +691,7 @@ export function PrintPage() {
       
       {/* Hidden component that will be used for printing barangay coordinators */}
       <div style={{ display: "none" }}>
+
         <BarangayCoordinatorPrintTemplate
           ref={barangayCoordinatorPrintRef}
           coordinators={printBarangayCoordinatorDataRef.current}
@@ -879,6 +921,29 @@ export function PrintPage() {
             </div>
           </div>
           
+          {/* Sorting dropdown - only show for household printing */}
+          {printType === "household" && (
+            <div className="mb-6">
+              <Label htmlFor="sortBy" className="mb-2 block">Sort By</Label>
+              <Select
+                value={sortBy}
+                onValueChange={(value) => {
+                  setIsFiltering(true);
+                  setSortBy(value);
+                  setTimeout(() => setIsFiltering(false), 300);
+                }}
+              >
+                <SelectTrigger id="sortBy" className="w-full max-w-xs">
+                  <SelectValue placeholder="Select sort order" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="purok_lastname">Purok then Lastname</SelectItem>
+                  <SelectItem value="lastname_purok">Lastname then Purok</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
           {/* Big Print Button */}
           <div className="flex justify-center mb-6">
             <Button 
@@ -935,6 +1000,11 @@ export function PrintPage() {
               <li>
                 Maximum {printType === "household" ? "households" : printType === "wardleader" ? "ward leaders" : "items"}: <span className="font-medium">{householdLimit}</span>
               </li>
+              {printType === "household" && (
+                <li>
+                  Sort by: <span className="font-medium">{sortBy === "purok_lastname" ? "Purok then Lastname" : "Lastname then Purok"}</span>
+                </li>
+              )}
             </ul>
           </div>
         </CardContent>

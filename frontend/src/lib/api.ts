@@ -17,7 +17,7 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30 seconds timeout
+  timeout: 120000, // 2 minutes timeout
 });
 
 // Create a silent auth client that doesn't trigger browser errors in console
@@ -27,7 +27,7 @@ export const authClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30 seconds timeout
+  timeout: 120000, // 2 minutes timeout
 });
 
 // Updated to include cache control options
@@ -58,9 +58,17 @@ apiClient.interceptors.request.use(
       }
     }
     
+    console.log('API Request Config:', {
+      url: config.url,
+      method: config.method,
+      params: config.params,
+      headers: config.headers
+    });
+    
     return config;
   },
   (error) => {
+    console.error('API Request Error:', error);
     return Promise.reject(error);
   }
 );
@@ -561,6 +569,9 @@ export interface PrintHouseholdData {
     name: string;
     position: string;
     remarks: string;
+    municipality?: string;
+    barangay?: string;
+    street_address?: string;
   }[];
   receivedBy: {
     name: string;
@@ -720,7 +731,10 @@ export const getHouseholdDataForPrinting = async (
             name: member.member_name.toUpperCase(),
             // Position depends on role
             position: member.household_role === 'Head of Household' ? 'HH Head' : 'Member',
-            remarks: 'STRAIGHT'
+            remarks: 'STRAIGHT',
+            municipality: member.municipality,
+            barangay: member.barangay,
+            street_address: member.street_address
           })),
           receivedBy: {
             name: '',
@@ -737,7 +751,10 @@ export const getHouseholdDataForPrinting = async (
           printHousehold.members.push({
             name: 'NO HOUSEHOLD MEMBERS',
             position: '-',
-            remarks: '-'
+            remarks: '-',
+            municipality: '',
+            barangay: '',
+            street_address: ''
           });
         }
         
@@ -770,29 +787,60 @@ export const getHouseholdDataForPrintingDirect = async (
     barangay?: string;
     purok_st?: string;
     limit?: number;
+    sortBy?: string;
   } = {},
   options: ApiOptions = {}
 ): Promise<PrintHouseholdData[]> => {
   try {
-    const params: Record<string, any> = {
+    // Convert 'all' values to undefined
+    const cleanedFilters = {
       ...filters,
-      limit: filters.limit || 50
+      municipality: filters.municipality === 'all' ? undefined : filters.municipality,
+      barangay: filters.barangay === 'all' ? undefined : filters.barangay,
+      purok_st: filters.purok_st === 'all' ? undefined : filters.purok_st,
+    };
+
+    const params = {
+      ...cleanedFilters,
+      _apiOptions: options
     };
     
-    // Convert 'all' values to undefined (null will be removed from params)
-    if (params.municipality === 'all') params.municipality = undefined;
-    if (params.barangay === 'all') params.barangay = undefined;
-    if (params.purok_st === 'all') params.purok_st = undefined;
+
     
-    // Add API options for cache control
-    if (options.bypassCache || options.cacheControl) {
-      params._apiOptions = options;
+    const response = await apiClient.get('/reports/printing/households', {
+      params
+    });
+    
+
+    
+    // Check if response.data exists and has the expected structure
+    if (!response.data || typeof response.data !== 'object') {
+      console.error('Invalid response format. Expected object but got:', typeof response.data);
+      throw new Error('Invalid response format from server');
+    }
+
+    // The response should have a data property containing the array
+    if (!response.data.data || !Array.isArray(response.data.data)) {
+      console.error('Invalid response format. Expected data.data to be an array but got:', typeof response.data.data);
+      throw new Error('Invalid response format from server');
     }
     
-    const response = await apiClient.get('/reports/printing/households', { params });
     return response.data.data;
   } catch (error) {
-    console.error('Error fetching printing data:', error);
+    console.error('Error fetching household data for printing:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('Axios error details:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        headers: error.response?.headers,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          params: error.config?.params,
+          headers: error.config?.headers
+        }
+      });
+    }
     throw handleApiError(error, 'Failed to fetch household data for printing');
   }
 };
